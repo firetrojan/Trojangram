@@ -17,8 +17,8 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 240
+    runs-on: ubuntu-22.04
+    timeout-minutes: 300
 
     steps:
       - name: Checkout with submodules
@@ -33,17 +33,33 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: NDK + CMake
+      # No third-party Android action - they break on new runner images.
+      # The GitHub image already ships the Android SDK; we only add what's missing.
+      - name: Android SDK, NDK, CMake
         run: |
-          sdkmanager --install "ndk;27.2.12479018" "cmake;3.22.1" "platforms;android-36" "build-tools;36.0.0"
-          yes | sdkmanager --licenses || true
+          set -e
+          : "${ANDROID_HOME:=${ANDROID_SDK_ROOT}}"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          CM=$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin 2>/dev/null | head -1)
+          if [ -z "$CM" ]; then
+            echo "no cmdline-tools, installing"
+            cd /tmp
+            curl -fL -o cmd.zip https://dl.google.com/android/repository/commandlinetools-linux-15859902_latest.zip
+            unzip -q cmd.zip
+            mkdir -p "$ANDROID_HOME/cmdline-tools"
+            mv cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
+            CM="$ANDROID_HOME/cmdline-tools/latest/bin"
+          fi
+          echo "sdkmanager at $CM"
+          export PATH="$PATH:$CM"
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+          sdkmanager --install "ndk;27.2.12479018" "cmake;3.22.1"
+          sdkmanager --list_installed
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> $GITHUB_ENV
 
       # APP_ID / APP_HASH come from Secrets, never from the repo.
-      # If the secrets are missing we leave BuildVars untouched so the build
-      # still compiles (and simply fails at login instead of at compile time).
       - name: Inject API credentials
         env:
           APP_ID: ${{ secrets.APP_ID }}
@@ -58,9 +74,24 @@ jobs:
           fi
           sed -n '29,30p' "$f"
 
-      # Optional: only used when you supply your own keystore.
-      # Without the secret the repo's dummy keystore (password "android") is used,
-      # which is fine for test builds.
+      # Firebase is optional. Without the secret the dummy files in the repo are used
+      # and the app builds fine - push notifications simply won't work.
+      - name: Restore Firebase config
+        env:
+          GOOGLE_SERVICES_BASE64: ${{ secrets.GOOGLE_SERVICES_BASE64 }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_BASE64" ]; then
+            echo "$GOOGLE_SERVICES_BASE64" | base64 -d > /tmp/gs.json
+            cp /tmp/gs.json TMessagesProj/google-services.json
+            cp /tmp/gs.json TMessagesProj_App/google-services.json
+            cp /tmp/gs.json TMessagesProj_AppStandalone/google-services.json
+            cp /tmp/gs.json TMessagesProj_AppHuawei/google-services.json
+            echo "firebase config restored"
+          else
+            echo "no firebase secret - building without push"
+          fi
+
+      # Optional: your own keystore. Without it the repo's dummy keystore is used.
       - name: Restore keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -77,7 +108,7 @@ jobs:
             } >> gradle.properties
             echo "using keystore from secrets"
           else
-            echo "no keystore secret - using the dummy keystore from the repo"
+            echo "no keystore secret - using dummy keystore"
           fi
 
       - name: Build
