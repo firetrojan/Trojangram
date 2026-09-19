@@ -1,1 +1,95 @@
+name: Build TrojanGram
 
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'Gradle task to run'
+        required: true
+        default: ':TMessagesProj_AppStandalone:assembleAfatDebug'
+        type: choice
+        options:
+          - ':TMessagesProj_AppStandalone:assembleAfatDebug'
+          - ':TMessagesProj_AppStandalone:assembleAfatStandalone'
+          - ':TMessagesProj_App:assembleAfatRelease'
+  push:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: NDK + CMake
+        run: |
+          sdkmanager --install "ndk;27.2.12479018" "cmake;3.22.1" "platforms;android-36" "build-tools;36.0.0"
+          yes | sdkmanager --licenses || true
+
+      # APP_ID / APP_HASH come from Secrets, never from the repo.
+      # If the secrets are missing we leave BuildVars untouched so the build
+      # still compiles (and simply fails at login instead of at compile time).
+      - name: Inject API credentials
+        env:
+          APP_ID: ${{ secrets.APP_ID }}
+          APP_HASH: ${{ secrets.APP_HASH }}
+        run: |
+          f=TMessagesProj/src/main/java/org/telegram/messenger/BuildVars.java
+          if [ -n "$APP_ID" ]; then
+            sed -i "s/public static int APP_ID = .*/public static int APP_ID = $APP_ID;/" "$f"
+          fi
+          if [ -n "$APP_HASH" ]; then
+            sed -i "s/public static String APP_HASH = .*/public static String APP_HASH = \"$APP_HASH\";/" "$f"
+          fi
+          sed -n '29,30p' "$f"
+
+      # Optional: only used when you supply your own keystore.
+      # Without the secret the repo's dummy keystore (password "android") is used,
+      # which is fine for test builds.
+      - name: Restore keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > TMessagesProj/config/release.keystore
+            {
+              echo "RELEASE_STORE_PASSWORD=$RELEASE_STORE_PASSWORD"
+              echo "RELEASE_KEY_ALIAS=$RELEASE_KEY_ALIAS"
+              echo "RELEASE_KEY_PASSWORD=$RELEASE_KEY_PASSWORD"
+            } >> gradle.properties
+            echo "using keystore from secrets"
+          else
+            echo "no keystore secret - using the dummy keystore from the repo"
+          fi
+
+      - name: Build
+        run: |
+          chmod +x gradlew
+          ./gradlew ${{ inputs.task || ':TMessagesProj_AppStandalone:assembleAfatDebug' }} --stacktrace --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: trojangram-apk
+          path: |
+            TMessagesProj_AppStandalone/build/outputs/apk/**/*.apk
+            TMessagesProj_App/build/outputs/apk/**/*.apk
+          if-no-files-found: warn
