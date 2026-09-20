@@ -1853,30 +1853,32 @@ if (org.trojangram.translate.TrojanTranslator.INSTANCE.enabled()) {
         return MessagesController.getGlobalMainSettings().getString("translate_to_language", LocaleController.getInstance().getCurrentLocale().getLanguage());
     }
 
-    public static void setToLanguage(String toLang) {// TROJANGRAM START
-private void translateTrojan() {
-    final String text = reqText == null ? "" : reqText.toString();
-    String from = fromLanguage == null ? null : fromLanguage.split("_")[0];
-    String to = toLanguage == null ? "en" : toLanguage.split("_")[0];
-    org.trojangram.translate.TrojanTranslator.INSTANCE.translate(text, from, to, result -> {
-        result.onSuccess(translated -> AndroidUtilities.runOnUIThread(() -> {
-            if (isDismissed()) return;
-            firstTranslation = false;
-            textView.setText(preprocessText(translated));
-            adapter.updateMainView(textViewContainer);
-        })).onFailure(err -> AndroidUtilities.runOnUIThread(() -> {
-            if (isDismissed()) return;
-            BulletinFactory.of((FrameLayout) containerView, resourcesProvider)
-                .createErrorBulletin(err.getMessage()).show();
-        }));
-        return null;
-    });
-}
-// TROJANGRAM END
+     public static void setToLanguage(String toLang) {
         MessagesController.getGlobalMainSettings().edit().putString("translate_to_language", toLang).apply();
     }
 
     public static void resetToLanguage() {
         MessagesController.getGlobalMainSettings().edit().remove("translate_to_language").apply();
     }
+
+    // TROJANGRAM START
+    private void translateTrojan() {
+        final String text = reqText == null ? "" : reqText.toString();
+        String from = fromLanguage == null ? null : fromLanguage.split("_")[0];
+        String to = toLanguage == null ? "en" : toLanguage.split("_")[0];
+        org.trojangram.translate.TrojanTranslator.translate(text, from, to, (translated, err) -> {
+            AndroidUtilities.runOnUIThread(() -> {
+                if (isDismissed()) return;
+                if (err != null) {
+                    BulletinFactory.of((FrameLayout) containerView, resourcesProvider)
+                        .createErrorBulletin(err.getMessage()).show();
+                } else if (translated != null) {
+                    firstTranslation = false;
+                    textView.setText(preprocessText(translated));
+                    adapter.updateMainView(textViewContainer);
+                }
+            });
+        });
+    }
+    // TROJANGRAM END
 }
