@@ -9317,6 +9317,56 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public void deleteMessages(ArrayList<Integer> messages, ArrayList<Long> randoms, TLRPC.EncryptedChat encryptedChat, long dialogId, boolean forAll, int mode, boolean cacheOnly, long taskId, TLObject taskRequest, int topicId, boolean movedToScheduled, int movedToScheduledMessageId) {
+        // TROJANGRAM START
+if (!cacheOnly && encryptedChat == null) {
+    org.trojangram.archive.ChatClassifier.Kind kind =
+        org.trojangram.archive.ChatClassifier.classify(
+            new org.trojangram.archive.ChatClassifier.ChatInfo(
+                dialogId, false,
+                dialogId < 0,                     // negative dialog id = channel/group
+                dialogId < 0, false, false, false));
+    if (kind != org.trojangram.archive.ChatClassifier.Kind.SECRET) {
+        for (Integer mid : messages) {
+            String text = cachedTextFor(currentAccount, dialogId, mid);
+            if (org.trojangram.archive.ContentGuard.mayCapture(kind,
+                    new org.trojangram.archive.ContentGuard.Message(text, false, 0, false))) {
+                org.trojangram.archive.HistoryDb
+                    .get(ApplicationLoader.applicationContext)
+                    .insertDeleted(new org.trojangram.archive.HistoryDb.Entry(
+                        0, dialogId, mid, kind.name(),
+                        org.trojangram.archive.ContentGuard.sanitise(
+                            new org.trojangram.archive.ContentGuard.Message(text)),
+                        0L, System.currentTimeMillis(), System.currentTimeMillis(), 0L));
+            }
+        }
+    }
+}
+// TROJANGRAM END
+        // TROJANGRAM START
+if (!cacheOnly && encryptedChat == null) {
+    org.trojangram.archive.ChatClassifier.Kind kind =
+        org.trojangram.archive.ChatClassifier.classify(
+            new org.trojangram.archive.ChatClassifier.ChatInfo(
+                dialogId, false,
+                dialogId < 0,                     // negative dialog id = channel/group
+                dialogId < 0, false, false, false));
+    if (kind != org.trojangram.archive.ChatClassifier.Kind.SECRET) {
+        for (Integer mid : messages) {
+            String text = cachedTextFor(currentAccount, dialogId, mid);
+            if (org.trojangram.archive.ContentGuard.mayCapture(kind,
+                    new org.trojangram.archive.ContentGuard.Message(text, false, 0, false))) {
+                org.trojangram.archive.HistoryDb
+                    .get(ApplicationLoader.applicationContext)
+                    .insertDeleted(new org.trojangram.archive.HistoryDb.Entry(
+                        0, dialogId, mid, kind.name(),
+                        org.trojangram.archive.ContentGuard.sanitise(
+                            new org.trojangram.archive.ContentGuard.Message(text)),
+                        0L, System.currentTimeMillis(), System.currentTimeMillis(), 0L));
+            }
+        }
+    }
+}
+// TROJANGRAM END
         final boolean scheduled = mode == ChatActivity.MODE_SCHEDULED;
         final boolean quickReplies = mode == ChatActivity.MODE_QUICK_REPLIES;
         final boolean welcomeMessages = mode == ChatActivity.MODE_WELCOME_MESSAGES;
