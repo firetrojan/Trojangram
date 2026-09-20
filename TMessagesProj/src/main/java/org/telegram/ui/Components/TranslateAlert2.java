@@ -307,7 +307,12 @@ public class TranslateAlert2 extends BottomSheet implements NotificationCenter.N
         return height >= listView.getHeight() - listView.getPaddingTop() - listView.getPaddingBottom();
     }
 
-    public void translate() {
+    public void translate() {// TROJANGRAM START
+if (org.trojangram.translate.TrojanTranslator.INSTANCE.enabled()) {
+    translateTrojan();
+    return;
+}
+// TROJANGRAM END
         if (reqId != null) {
             ConnectionsManager.getInstance(currentAccount).cancelRequest(reqId, true);
             reqId = null;
@@ -1848,7 +1853,26 @@ public class TranslateAlert2 extends BottomSheet implements NotificationCenter.N
         return MessagesController.getGlobalMainSettings().getString("translate_to_language", LocaleController.getInstance().getCurrentLocale().getLanguage());
     }
 
-    public static void setToLanguage(String toLang) {
+    public static void setToLanguage(String toLang) {// TROJANGRAM START
+private void translateTrojan() {
+    final String text = reqText == null ? "" : reqText.toString();
+    String from = fromLanguage == null ? null : fromLanguage.split("_")[0];
+    String to = toLanguage == null ? "en" : toLanguage.split("_")[0];
+    org.trojangram.translate.TrojanTranslator.INSTANCE.translate(text, from, to, result -> {
+        result.onSuccess(translated -> AndroidUtilities.runOnUIThread(() -> {
+            if (isDismissed()) return;
+            firstTranslation = false;
+            textView.setText(preprocessText(translated));
+            adapter.updateMainView(textViewContainer);
+        })).onFailure(err -> AndroidUtilities.runOnUIThread(() -> {
+            if (isDismissed()) return;
+            BulletinFactory.of((FrameLayout) containerView, resourcesProvider)
+                .createErrorBulletin(err.getMessage()).show();
+        }));
+        return null;
+    });
+}
+// TROJANGRAM END
         MessagesController.getGlobalMainSettings().edit().putString("translate_to_language", toLang).apply();
     }
 
