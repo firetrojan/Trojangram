@@ -1,0 +1,55 @@
+TrojanGram — open source licences and attribution
+================================================
+
+TrojanGram is free software: you can redistribute it and/or modify it under the terms of the
+GNU General Public License version 3, or (at your option) any later version.
+See /legal/LICENSE for the full text.
+
+TrojanGram is a fork of, and incorporates ideas and code from, the following projects.
+Each keeps its own licence; the combined work is distributed as GPL-3.0-or-later.
+
+-------------------------------------------------------------------------------
+Telegram for Android
+  https://github.com/DrKLO/Telegram
+  License: GNU General Public License v2.0 or later (GPL-2.0-or-later)
+  Used for: the entire messaging client this fork is based on.
+
+exteraGram
+  https://github.com/exteraSquad/exteraGram  (public source, version 9.6.6)
+  https://exteragram.app
+  License: GNU General Public License v2.0 (GPL-2.0)
+  Used for: glass styling, drawer, icon packs, pill-stack tabs, feed, camera,
+            now playing, speech, badges, plugins engine design, preferences layout.
+
+AyuGram
+  https://github.com/AyuGram/AyuGram4A  (public source, version 9.6.6)
+  License: GNU General Public License v2.0 (GPL-2.0)
+  Used for: ghost/spy mode design, deleted and edited message history design,
+            regex filters design, quality-of-life toggles, alternate launcher icons.
+
+NagramXF / Nekogram — translation module
+  https://github.com/Keeperorowner/NagramXF
+  License: GNU General Public License v3.0 (GPL-3.0)
+  Used for: the translation provider architecture (rewritten here as
+            org.trojangram.translate). Every provider requires the user's own API key.
+
+EasyList / EasyPrivacy
+  https://easylist.to
+  License: Creative Commons Attribution-ShareAlike 4.0 (CC BY-SA 4.0)
+  Used for: web ad blocking inside TrojanGram's built-in browser.
+
+uBlock Origin filter lists
+  https://github.com/uBlockOrigin/uAssets
+  License: GNU General Public License v3.0 (GPL-3.0)
+  Used for: web ad blocking inside TrojanGram's built-in browser.
+
+-------------------------------------------------------------------------------
+Trademarks
+  "Telegram" and the Telegram logo are trademarks of Telegram FZ-LLC.
+  TrojanGram is an unofficial client and is not affiliated with, endorsed by or
+  sponsored by Telegram. No Telegram branding or official logo is used.
+
+Scope note
+  Blocking applies only to web pages opened inside TrojanGram's built-in browser.
+  Telegram's own sponsored messages are displayed as Telegram intends, per the
+  Telegram API Terms of Service.
