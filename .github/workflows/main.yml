@@ -1,0 +1,253 @@
+# TrojanGram build — recreated 2026-09-20
+#
+# Verified against the repo at HEAD, not copied from the deleted file:
+#   gradle wrapper 8.13        AGP 8.13.2         Kotlin 2.1.0        JDK 17
+#   ndkVersion 27.2.12479018   CMake 3.22.1       compileSdk 36       flavor "afat"
+#   submodules: tlottie, libvpx, dav1d, ffmpeg (+more)  -> recursive checkout required
+#
+# What is new versus the old file:
+#   1. Pre-flight step that FAILS EARLY with a clear message if the 22 Kotlin files or any
+#      TROJANGRAM hook are missing, so you never wait 2 hours to learn the tree is incomplete.
+#   2. Neutralises the two UNGUARDED google-services modules (TMessagesProj_App:208,
+#      TMessagesProj_AppHuawei:169) when no Firebase secret exists. Without this, choosing
+#      the App task fails at configuration time. Nothing is committed back to the repo.
+#   3. "arm64 only" switch — cuts the native build to one ABI instead of four. Your phone is
+#      arm64, so this is the fast path for testing.
+#   4. Gradle dependency cache between runs.
+#   5. On failure, the last 150 lines of the Gradle log are written to the job summary, so the
+#      real error is on screen instead of buried.
+#   6. Push no longer triggers a build. Only "Run workflow" and version tags do. Every commit
+#      used to burn a multi-hour runner; you now choose when to spend it.
+#
+# Secrets, all optional except APP_ID / APP_HASH:
+#   APP_ID, APP_HASH                 your own from my.telegram.org  (required to log in)
+#   GOOGLE_SERVICES_BASE64           base64 of google-services.json (push notifications)
+#   KEYSTORE_BASE64                  base64 of your release.keystore
+#   RELEASE_STORE_PASSWORD, RELEASE_KEY_ALIAS, RELEASE_KEY_PASSWORD
+
+name: Build TrojanGram
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'Gradle task'
+        required: true
+        default: ':TMessagesProj_AppStandalone:assembleAfatDebug'
+        type: choice
+        options:
+          - ':TMessagesProj_AppStandalone:assembleAfatDebug'
+          - ':TMessagesProj_App:assembleAfatDebug'
+          - ':TMessagesProj_AppStandalone:assembleAfatStandalone'
+          - ':TMessagesProj_App:assembleAfatRelease'
+      abi:
+        description: 'ABI filter'
+        required: true
+        default: 'arm64-v8a (fast, ~1/4 the build time)'
+        type: choice
+        options:
+          - 'arm64-v8a (fast, ~1/4 the build time)'
+          - 'all four ABIs (universal APK, slow)'
+  push:
+    tags: [ 'v*' ]
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 330
+
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      # ---------------------------------------------------------------
+      - name: Pre-flight — is the TrojanGram tree actually here?
+        run: |
+          set -e
+          echo "### TrojanGram pre-flight" >> $GITHUB_STEP_SUMMARY
+          fail=0
+
+          kt=$(find TMessagesProj/src/main/java/org/trojangram -name '*.kt' 2>/dev/null | wc -l)
+          echo "- Kotlin modules found: **$kt** / 22" >> $GITHUB_STEP_SUMMARY
+          [ "$kt" -eq 22 ] || { echo "  !! expected 22 Kotlin files" ; fail=1; }
+
+          check() { # file, marker
+            if grep -q "$2" "$1" 2>/dev/null; then
+              echo "- $1 — marker present" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "- **$1 — MARKER MISSING ($2)**" >> $GITHUB_STEP_SUMMARY
+              fail=1
+            fi
+          }
+          B=TMessagesProj/src/main/java/org/telegram
+          check $B/messenger/ApplicationLoader.java          'TROJANGRAM START'
+          check $B/ui/ActionBar/BaseFragment.java            'TROJANGRAM START'
+          check $B/ui/WebviewActivity.java                   'TROJANGRAM START'
+          check $B/messenger/MessagesController.java         'TROJANGRAM START'
+          check $B/ui/Components/TranslateAlert2.java        'TROJANGRAM START'
+          check TMessagesProj/src/main/AndroidManifest.xml   'TrojanPreferencesActivity'
+          check $B/ui/ProfileActivity.java                   'trojanRow'
+
+          # Hook 7's known failure mode: a method pasted inside another method's signature line.
+          if grep -q 'setToLanguage(String toLang) {// TROJANGRAM START' $B/ui/Components/TranslateAlert2.java; then
+            echo "- **TranslateAlert2.java — Hook 7 is nested inside setToLanguage(). See patches/HOOK7_FIX.txt**" >> $GITHUB_STEP_SUMMARY
+            fail=1
+          fi
+
+          # google-services must be guarded in every module that applies it.
+          for m in TMessagesProj TMessagesProj_App TMessagesProj_AppStandalone TMessagesProj_AppHuawei; do
+            if grep -q "apply plugin: 'com.google.gms.google-services'" $m/build.gradle 2>/dev/null \
+               && ! grep -q 'googleServicesFile' $m/build.gradle 2>/dev/null; then
+              echo "- $m/build.gradle — google-services **unguarded** (patched at build time below)" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+
+          [ "$fail" -eq 0 ] || { echo; echo "Pre-flight failed — fix the items marked ** above."; exit 1; }
+          echo; echo "Pre-flight passed."
+
+      - name: JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # The GitHub image already ships the Android SDK; only add what is missing.
+      # Third-party "setup-android" actions break on new runner images, so we do not use one.
+      - name: Android SDK, NDK 27.2.12479018, CMake 3.22.1
+        run: |
+          set -e
+          : "${ANDROID_HOME:=${ANDROID_SDK_ROOT}}"
+          CM=$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin 2>/dev/null | head -1)
+          if [ -z "$CM" ]; then
+            cd /tmp
+            curl -fL -o cmd.zip https://dl.google.com/android/repository/commandlinetools-linux-15859902_latest.zip
+            unzip -q cmd.zip
+            mkdir -p "$ANDROID_HOME/cmdline-tools"
+            mv cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
+            CM="$ANDROID_HOME/cmdline-tools/latest/bin"
+          fi
+          export PATH="$PATH:$CM"
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;36.0.0" \
+                             "ndk;27.2.12479018" "cmake;3.22.1"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> $GITHUB_ENV
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle', 'gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      # APP_ID / APP_HASH come from Secrets, never from the repo.
+      - name: Inject API credentials
+        env:
+          APP_ID: ${{ secrets.APP_ID }}
+          APP_HASH: ${{ secrets.APP_HASH }}
+        run: |
+          f=TMessagesProj/src/main/java/org/telegram/messenger/BuildVars.java
+          [ -n "$APP_ID" ]   && sed -i "s/public static int APP_ID = .*/public static int APP_ID = $APP_ID;/" "$f"
+          [ -n "$APP_HASH" ] && sed -i "s/public static String APP_HASH = .*/public static String APP_HASH = \"$APP_HASH\";/" "$f"
+          sed -n '29,30p' "$f"
+          [ -n "$APP_ID" ] || echo "::warning::APP_ID secret is not set - the app will not log in."
+
+      # Firebase is optional. Without the secret, push notifications are simply off.
+      - name: Restore Firebase config
+        env:
+          GOOGLE_SERVICES_BASE64: ${{ secrets.GOOGLE_SERVICES_BASE64 }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_BASE64" ]; then
+            echo "$GOOGLE_SERVICES_BASE64" | base64 -d > /tmp/gs.json
+            for m in TMessagesProj TMessagesProj_App TMessagesProj_AppStandalone TMessagesProj_AppHuawei; do
+              cp /tmp/gs.json $m/google-services.json
+            done
+            echo "firebase config restored to all four modules"
+          else
+            # No Firebase. Comment out the google-services plugin wherever it is applied
+            # WITHOUT the exists() guard, or configuration fails for that module.
+            for m in TMessagesProj TMessagesProj_App TMessagesProj_AppStandalone TMessagesProj_AppHuawei; do
+              if grep -q "apply plugin: 'com.google.gms.google-services'" $m/build.gradle \
+                 && ! grep -q 'googleServicesFile' $m/build.gradle; then
+                sed -i "s|^apply plugin: 'com.google.gms.google-services'|// disabled by CI: no google-services.json\n// &|" $m/build.gradle
+                echo "$m/build.gradle - google-services disabled for this build"
+              fi
+            done
+            echo "no firebase secret - building without push"
+          fi
+
+      # Optional. Without it the dummy keystore already in the repo is used.
+      - name: Restore keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > TMessagesProj/config/release.keystore
+            {
+              echo "RELEASE_STORE_PASSWORD=$RELEASE_STORE_PASSWORD"
+              echo "RELEASE_KEY_ALIAS=$RELEASE_KEY_ALIAS"
+              echo "RELEASE_KEY_PASSWORD=$RELEASE_KEY_PASSWORD"
+            } >> gradle.properties
+            echo "using keystore from secrets"
+          else
+            echo "no keystore secret - using the dummy keystore in the repo"
+          fi
+
+      # The "afat" flavor lists all four ABIs. One ABI is enough to test on a phone and
+      # cuts the native build to roughly a quarter of the time.
+      - name: Apply ABI filter
+        run: |
+          if [ "${{ inputs.abi }}" = "all four ABIs (universal APK, slow)" ] || [ -z "${{ inputs.abi }}" ]; then
+            echo "building all four ABIs"
+            exit 0
+          fi
+          for f in TMessagesProj_AppStandalone.gradle TMessagesProj_App.gradle TMessagesProj_AppHuawei.gradle; do
+            [ -f "$f" ] || continue
+            n=$(grep -c 'abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"' "$f" || true)
+            sed -i 's/abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"/abiFilters "arm64-v8a"/' "$f"
+            echo "$f - $n abiFilters line(s) narrowed to arm64-v8a"
+          done
+
+      - name: Build
+        run: |
+          chmod +x gradlew
+          TASK="${{ inputs.task }}"
+          [ -n "$TASK" ] || TASK=":TMessagesProj_AppStandalone:assembleAfatDebug"
+          echo "task: $TASK"
+          set -o pipefail
+          ./gradlew "$TASK" --stacktrace --no-daemon 2>&1 | tee /tmp/build.log
+
+      - name: On failure — put the real error in the job summary
+        if: failure()
+        run: |
+          {
+            echo "## Build failed — last 150 lines"
+            echo '```'
+            tail -150 /tmp/build.log 2>/dev/null || echo "(no log captured)"
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trojangram-apk
+          path: |
+            TMessagesProj_AppStandalone/build/outputs/apk/**/*.apk
+            TMessagesProj_App/build/outputs/apk/**/*.apk
+          if-no-files-found: warn
