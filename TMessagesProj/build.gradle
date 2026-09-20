@@ -137,7 +137,11 @@ android {
 
         coreLibraryDesugaringEnabled true
     }
-
+    // TROJANGRAM START
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
+    // TROJANGRAM END
 
     defaultConfig {
         minSdkVersion 21
