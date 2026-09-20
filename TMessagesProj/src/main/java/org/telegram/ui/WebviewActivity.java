@@ -235,6 +235,18 @@ public class WebviewActivity extends BaseFragment {
         }
 
         webView.setWebViewClient(new WebViewClient() {
+            // TROJANGRAM START
+@Override
+public android.webkit.WebResourceResponse shouldInterceptRequest(
+        android.webkit.WebView view, android.webkit.WebResourceRequest request) {
+    String url = request.getUrl() != null ? request.getUrl().toString() : null;
+    if (org.trojangram.browser.AdBlockEngine.shouldBlock(url)) {
+        return new android.webkit.WebResourceResponse("text/plain", "utf-8",
+            new java.io.ByteArrayInputStream(new byte[0]));
+    }
+    return super.shouldInterceptRequest(view, request);
+}
+// TROJANGRAM END
 
             private boolean isInternalUrl(String url) {
                 if (TextUtils.isEmpty(url)) {
