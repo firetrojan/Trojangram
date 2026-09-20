@@ -33,9 +33,10 @@ on:
       task:
         description: 'Gradle task'
         required: true
-        default: ':TMessagesProj_AppStandalone:assembleAfatDebug'
+        default: 'FAST CHECK - :TMessagesProj:compileDebugJavaWithJavac'
         type: choice
         options:
+          - 'FAST CHECK - :TMessagesProj:compileDebugJavaWithJavac'
           - ':TMessagesProj_AppStandalone:assembleAfatDebug'
           - ':TMessagesProj_App:assembleAfatDebug'
           - ':TMessagesProj_AppStandalone:assembleAfatStandalone'
@@ -227,20 +228,48 @@ jobs:
         run: |
           chmod +x gradlew
           TASK="${{ inputs.task }}"
+          # strip the "FAST CHECK - " label if that option was picked
+          TASK="${TASK#FAST CHECK - }"
           [ -n "$TASK" ] || TASK=":TMessagesProj_AppStandalone:assembleAfatDebug"
           echo "task: $TASK"
+          echo
+          echo "NOTE: --stacktrace was removed on purpose. It printed ~2600 lines of"
+          echo "Gradle internals and pushed the actual error off the end of the log."
           set -o pipefail
-          ./gradlew "$TASK" --stacktrace --no-daemon 2>&1 | tee /tmp/build.log
+          # --console=plain  : no ANSI colour codes in the captured log
+          # --build-cache    : reuse task outputs from previous runs (~/.gradle/caches is cached)
+          ./gradlew "$TASK" --no-daemon --console=plain --build-cache 2>&1 | tee /tmp/build.log
 
-      - name: On failure — put the real error in the job summary
+      # The old version did `tail -150`, which showed nothing but Gradle's internal
+      # stack frames. This pulls out the lines that actually name the problem.
+      - name: On failure — extract the real error
         if: failure()
         run: |
+          LOG=/tmp/build.log
           {
-            echo "## Build failed — last 150 lines"
+            echo "## Build failed — the useful lines"
+            echo
+            echo "### 1. What went wrong"
             echo '```'
-            tail -150 /tmp/build.log 2>/dev/null || echo "(no log captured)"
+            sed -n '/FAILURE: Build failed with an exception/,/^\* Try:/p' "$LOG" 2>/dev/null | head -50
+            echo '```'
+            echo
+            echo "### 2. Failed tasks and compile errors"
+            echo '```'
+            grep -nE "^> Task .*FAILED|^Execution failed for task|^Caused by:|error:|^e: |ERROR:|A problem occurred|Could not|Unresolved reference" "$LOG" 2>/dev/null | head -60
+            echo '```'
+            echo
+            echo "### 3. Kotlin/Java diagnostics (first 60)"
+            echo '```'
+            grep -nE "\.java:[0-9]+:|\.kt:[0-9]+:[0-9]+:" "$LOG" 2>/dev/null | head -60
+            echo '```'
+            echo
+            echo "### 4. Last 30 lines"
+            echo '```'
+            tail -30 "$LOG" 2>/dev/null || echo "(no log captured — the Build step never ran)"
             echo '```'
           } >> $GITHUB_STEP_SUMMARY
+          echo "wrote the error summary"
 
       - name: Upload APK
         if: always()
