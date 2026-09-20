@@ -697,7 +697,11 @@
         <meta-data
             android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
             android:value="org.telegram.messenger.chromecast.ChromecastOptionsProvider" />
-
+<!-- TROJANGRAM START -->
+<activity android:name="org.trojangram.ui.TrojanPreferencesActivity"
+          android:label="TrojanGram Preferences"
+          android:exported="false" />
+<!-- TROJANGRAM END -->
     </application>
 
 </manifest>
