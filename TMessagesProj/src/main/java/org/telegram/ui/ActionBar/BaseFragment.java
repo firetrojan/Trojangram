@@ -527,6 +527,33 @@ public abstract class BaseFragment {
 
     @CallSuper
     public void onResume() {
+        // TROJANGRAM START
+try {
+    boolean secret = arguments != null && arguments.getInt("enc_id", 0) != 0;
+    android.app.Activity a = getParentActivity();
+    if (a != null) {
+        if (secret) {
+            a.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        } else {
+            a.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        }
+    }
+    android.util.DisplayMetrics dm = org.telegram.messenger.ApplicationLoader
+        .applicationContext.getResources().getDisplayMetrics();
+    org.trojangram.glass.GlassEngine.prefetch(dm.widthPixels, dm.heightPixels,
+        org.trojangram.glass.GlassSpec.Companion.fromPrefs(
+            org.trojangram.core.TrojanPrefs.getBoolean(
+                org.trojangram.core.TrojanPrefs.Keys.GLASS_ENABLED, true),
+            org.trojangram.core.TrojanPrefs.getInt(
+                org.trojangram.core.TrojanPrefs.Keys.GLASS_BLUR, 18),
+            org.trojangram.core.TrojanPrefs.getInt(
+                org.trojangram.core.TrojanPrefs.Keys.GLASS_ALPHA, 35),
+            org.trojangram.core.TrojanPrefs.getString(
+                org.trojangram.core.TrojanPrefs.Keys.GLASS_OUTLINE, "Solid")));
+} catch (Exception e) {
+    org.telegram.messenger.FileLog.e(e);
+}
+// TROJANGRAM END
         isPaused = false;
         if (actionBar != null) {
             actionBar.onResume();
