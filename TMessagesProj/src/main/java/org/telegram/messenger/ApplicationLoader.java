@@ -288,7 +288,16 @@ public class ApplicationLoader extends Application {
         }
 
         super.onCreate();
-
+// TROJANGRAM START
+org.trojangram.core.TrojanPrefs.init(this);
+org.trojangram.plugins.PluginEngine.registerBuiltIns();
+new Thread(() -> {
+    if (org.trojangram.browser.AdBlockEngine.enabled()) {
+        org.trojangram.browser.AdBlockEngine.update();
+    }
+    org.trojangram.archive.HistoryDb.get(ApplicationLoader.applicationContext);
+}, "trojangram-boot").start();
+// TROJANGRAM END
         // AndroidUtilities must be initialized before FileLog
         final String helloWorld = AndroidUtilities.getHelloWorld();
 
