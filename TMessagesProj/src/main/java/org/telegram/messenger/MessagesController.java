@@ -9317,7 +9317,32 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public void deleteMessages(ArrayList<Integer> messages, ArrayList<Long> randoms, TLRPC.EncryptedChat encryptedChat, long dialogId, boolean forAll, int mode, boolean cacheOnly, long taskId, TLObject taskRequest, int topicId, boolean movedToScheduled, int movedToScheduledMessageId) {
-
+// TROJANGRAM START
+        if (!cacheOnly && encryptedChat == null) {
+            org.trojangram.archive.ChatClassifier.Kind kind =
+                org.trojangram.archive.ChatClassifier.classify(
+                    new org.trojangram.archive.ChatClassifier.ChatInfo(
+                        dialogId, false,
+                        dialogId < 0,
+                        dialogId < 0, false, false, false));
+            if (kind != org.trojangram.archive.ChatClassifier.Kind.SECRET) {
+                for (Integer mid : messages) {
+                    org.trojangram.archive.ContentGuard.Message msg =
+                        new org.trojangram.archive.ContentGuard.Message(
+                            "", false, 0, false);
+                    if (org.trojangram.archive.ContentGuard.mayCapture(kind, msg)) {
+                        org.trojangram.archive.HistoryDb
+                            .get(ApplicationLoader.applicationContext)
+                            .insertDeleted(new org.trojangram.archive.HistoryDb.Entry(
+                                0, dialogId, mid, kind.name(),
+                                org.trojangram.archive.ContentGuard.sanitise(msg),
+                                0L, System.currentTimeMillis(),
+                                System.currentTimeMillis(), 0L));
+                    }
+                }
+            }
+        }
+        // TROJANGRAM END
         final boolean scheduled = mode == ChatActivity.MODE_SCHEDULED;
         final boolean quickReplies = mode == ChatActivity.MODE_QUICK_REPLIES;
         final boolean welcomeMessages = mode == ChatActivity.MODE_WELCOME_MESSAGES;
