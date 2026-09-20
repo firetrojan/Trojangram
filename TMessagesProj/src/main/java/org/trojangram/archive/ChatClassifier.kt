@@ -35,6 +35,7 @@ object ChatClassifier {
         val starsCharged: Boolean = false
     )
 
+        @JvmStatic
     fun classify(info: ChatInfo?): Kind {
         if (info == null) return Kind.PRIVATE_1TO1_HUMAN           // fail safe
         if (info.isSecret) return Kind.SECRET
