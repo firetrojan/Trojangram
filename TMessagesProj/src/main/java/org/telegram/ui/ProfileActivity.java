@@ -625,6 +625,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private int settingsSectionRow;
     private int settingsSectionRow2;
     private int notificationRow;
+    private int trojanRow;
     private int languageRow;
     private int privacyRow;
     private int dataRow;
@@ -4532,6 +4533,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 presentFragment(fragment);
             } else if (position == notificationRow) {
                 presentFragment(new NotificationsSettingsActivity());
+            } else if (position == trojanRow) {
+                getParentActivity().startActivity(new Intent(getParentActivity(),
+                    org.trojangram.ui.TrojanPreferencesActivity.class));
             } else if (position == privacyRow) {
                 presentFragment(new PrivacySettingsActivity().setCurrentPassword(currentPassword));
             } else if (position == dataRow) {
@@ -10640,6 +10644,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 settingsSectionRow2 = rowCount++;
                 chatRow = rowCount++;
                 privacyRow = rowCount++;
+                trojanRow = rowCount++;
                 notificationRow = rowCount++;
                 dataRow = rowCount++;
                 liteModeRow = rowCount++;
@@ -13835,7 +13840,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         textCell.setImageLeft(23);
                     } else if (position == notificationRow) {
                         textCell.setTextAndIcon(LocaleController.getString(R.string.NotificationsAndSounds), R.drawable.msg2_notifications, true);
-                    } else if (position == privacyRow) {
+                    } else if (position == trojanRow) {
+                        textCell.setTextAndIcon("TrojanGram Preferences", R.drawable.msg2_secret, true);} else if (position == privacyRow) {
                         textCell.setTextAndIcon(LocaleController.getString(R.string.PrivacySettings), R.drawable.msg2_secret, true);
                     } else if (position == dataRow) {
                         textCell.setTextAndIcon(LocaleController.getString(R.string.DataSettings), R.drawable.msg2_data, true);
@@ -14326,7 +14332,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     position == subscribersRow || position == subscribersRequestsRow || position == administratorsRow || position == settingsRow || position == blockedUsersRow ||
                     position == addMemberRow || position == joinRow || position == unblockRow ||
                     position == sendMessageRow || position == notificationRow || position == privacyRow ||
-                    position == languageRow || position == dataRow || position == chatRow ||
+                    position == languageRow || position == dataRow || position == chatRow || position == trojanRow ||
                     position == questionRow || position == devicesRow || position == filtersRow || position == stickersRow ||
                     position == faqRow || position == policyRow || position == sendLogsRow || position == sendLastLogsRow ||
                     position == clearLogsRow || position == switchBackendRow || position == setAvatarRow || position == addToGroupButtonRow ||
