@@ -2,6 +2,7 @@ import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
 
 apply plugin: 'com.android.library'
 apply plugin: 'org.telegram.build-plugin'
+apply plugin: 'org.jetbrains.kotlin.android'
 apply plugin: 'idea'
 
 idea {
