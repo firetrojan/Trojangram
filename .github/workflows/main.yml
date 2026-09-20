@@ -204,7 +204,44 @@ jobs:
               echo "RELEASE_KEY_ALIAS=$RELEASE_KEY_ALIAS"
               echo "RELEASE_KEY_PASSWORD=$RELEASE_KEY_PASSWORD"
             } >> gradle.properties
-            echo "using keystore from secrets"
+
+            # Fail HERE, in 30 seconds, instead of at packageAfat* after 50 minutes.
+            # Android's APK signer accepts RSA, EC and DSA only. A keystore generated with a
+            # post-quantum algorithm (ML-DSA, SLH-DSA) reaches the very end of the build and
+            # then dies with "Unsupported key algorithm: 2.16.840.1.101.3.4.3.x".
+            KT="$(ls -d "$JAVA_HOME"/bin 2>/dev/null)/keytool"
+            [ -x "$KT" ] || KT=keytool
+            INFO=$("$KT" -list -v -keystore TMessagesProj/config/release.keystore \
+                     -storepass "$RELEASE_STORE_PASSWORD" 2>&1) || {
+              echo "::error::Cannot read the keystore. Wrong RELEASE_STORE_PASSWORD?"
+              echo "$INFO" | head -5
+              exit 1
+            }
+            ALG=$(echo "$INFO" | grep -m1 "Subject Public Key Algorithm" || true)
+            SIG=$(echo "$INFO" | grep -m1 "Signature algorithm name" || true)
+            {
+              echo "## Keystore in use (from KEYSTORE_BASE64)"
+              echo '```'
+              echo "$INFO" | grep -E "Alias name|Owner|Valid from|Subject Public Key Algorithm|Signature algorithm name" | sed 's/^/  /'
+              echo '```'
+            } >> $GITHUB_STEP_SUMMARY
+            echo "  $ALG"
+            echo "  $SIG"
+            # Reject post-quantum FIRST: "ML-DSA" contains "DSA", so a plain
+            # grep for DSA would wrongly accept it.
+            if echo "$ALG$SIG" | grep -qiE "ML-DSA|SLH-DSA|FALCON|SPHINCS|DILITHIUM|2\.16\.840\.1\.101\.3\.4\.3\.(1[7-9]|[2-9][0-9])"; then
+              echo "::error::Post-quantum signing key detected. Android's APK signer cannot use it."
+              echo "Regenerate in KeyStore Explorer with Algorithm=RSA, size=2048,"
+              echo "or delete the KEYSTORE_BASE64 secret to fall back to the repo keystore."
+              exit 1
+            fi
+            if ! echo "$ALG$SIG" | grep -qiE "RSA|ECDSA|Elliptic|EC key|[^-]DSA"; then
+              echo "::error::Unrecognised signing key. Android accepts RSA, EC or DSA only."
+              echo "Regenerate in KeyStore Explorer with Algorithm=RSA, size=2048,"
+              echo "or delete the KEYSTORE_BASE64 secret to fall back to the repo keystore."
+              exit 1
+            fi
+            echo "using keystore from secrets - algorithm OK"
           else
             echo "no keystore secret - using the dummy keystore in the repo"
           fi
