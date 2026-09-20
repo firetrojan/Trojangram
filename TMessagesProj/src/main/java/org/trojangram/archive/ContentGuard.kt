@@ -26,7 +26,7 @@ object ContentGuard {
         val ttlSeconds: Int = 0,
         val isViewOnce: Boolean = false
     )
-
+    @JvmStatic
     fun mayCapture(chatKind: Kind, message: Message): Boolean {
         if (chatKind == Kind.SECRET) return false
         if (message.isViewOnce || message.ttlSeconds > 0) return false
@@ -35,6 +35,7 @@ object ContentGuard {
     }
 
     /** Media is stripped; only the text (and its caption) is stored. */
+    @JvmStatic
     fun sanitise(message: Message): String =
         message.text.orEmpty().take(MAX_TEXT)
 
