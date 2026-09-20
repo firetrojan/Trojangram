@@ -4,6 +4,8 @@ build/
 obj/
 *.iml
 local.properties
+**/google-services.json
+**/agconnect-services.json
 TMessagesProj/.cxx/
 TMessagesProj/jniLibs/
 TMessagesProj/jniRes/

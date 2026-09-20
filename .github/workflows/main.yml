@@ -74,21 +74,57 @@ jobs:
           fi
           sed -n '29,30p' "$f"
 
-      # Firebase is optional. Without the secret the dummy files in the repo are used
-      # and the app builds fine - push notifications simply won't work.
+      # Firebase is optional. Without the secret, generate non-secret placeholders
+      # so the Google Services plugin can configure the build without push support.
       - name: Restore Firebase config
         env:
           GOOGLE_SERVICES_BASE64: ${{ secrets.GOOGLE_SERVICES_BASE64 }}
         run: |
           if [ -n "$GOOGLE_SERVICES_BASE64" ]; then
             echo "$GOOGLE_SERVICES_BASE64" | base64 -d > /tmp/gs.json
-            cp /tmp/gs.json TMessagesProj/google-services.json
-            cp /tmp/gs.json TMessagesProj_App/google-services.json
-            cp /tmp/gs.json TMessagesProj_AppStandalone/google-services.json
-            cp /tmp/gs.json TMessagesProj_AppHuawei/google-services.json
+            for module in TMessagesProj TMessagesProj_App TMessagesProj_AppStandalone TMessagesProj_AppHuawei; do
+              cp /tmp/gs.json "$module/google-services.json"
+            done
             echo "firebase config restored"
           else
-            echo "no firebase secret - building without push"
+            for module in TMessagesProj TMessagesProj_App TMessagesProj_AppStandalone TMessagesProj_AppHuawei; do
+              cat > "$module/google-services.json" <<'JSON'
+          {
+            "project_info": {
+              "project_number": "0",
+              "project_id": "trojangram-ci",
+              "storage_bucket": "trojangram-ci.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:0:android:0000000000000000",
+                  "android_client_info": {
+                    "package_name": "org.trojangram.messenger"
+                  }
+                }
+              },
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:0:android:0000000000000001",
+                  "android_client_info": {
+                    "package_name": "org.trojangram.messenger.beta"
+                  }
+                }
+              },
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:0:android:0000000000000002",
+                  "android_client_info": {
+                    "package_name": "org.trojangram.messenger.web"
+                  }
+                }
+              }
+            ]
+          }
+          JSON
+            done
+            echo "no firebase secret - generated non-secret placeholder config"
           fi
 
       # Optional: your own keystore. Without it the repo's dummy keystore is used.
