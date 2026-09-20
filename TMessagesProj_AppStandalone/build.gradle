@@ -158,4 +158,9 @@ android {
     }
 }
 
-apply plugin: 'com.google.gms.google-services'
+def googleServicesFile = file("google-services.json")
+if (googleServicesFile.exists()) {
+    apply plugin: 'com.google.gms.google-services'
+} else {
+    logger.lifecycle("google-services.json not found; building without Firebase")
+}
